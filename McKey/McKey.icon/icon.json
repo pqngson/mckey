@@ -1,0 +1,180 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "extended-srgb:0.00000,0.76471,0.81569,1.00000",
+      "extended-srgb:0.38039,0.33333,0.96078,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode-specializations" : [
+            {
+              "value" : "darken"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "normal"
+            }
+          ],
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:0.00000,0.00000,0.00000,1.00000"
+              }
+            }
+          ],
+          "glass-specializations" : [
+            {
+              "value" : true
+            },
+            {
+              "appearance" : "tinted",
+              "value" : false
+            }
+          ],
+          "image-name" : "McKey_Text.svg",
+          "name" : "McKey_Text"
+        },
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "linear-gradient" : [
+                  "extended-srgb:0.00000,0.78431,0.70196,1.00000",
+                  "srgb:0.71825,0.76155,1.00000,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.33544211034206267,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.854355833577319,
+                    "y" : 0.9524858241113321
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.00000,0.92142,0.82523,1.00000",
+                  "srgb:0.97778,0.72305,1.00000,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.2588994580264545,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.6696024390303007,
+                    "y" : 1.0263218460377266
+                  }
+                }
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "McKey_Keys.svg",
+          "name" : "McKey_Keys"
+        },
+        {
+          "blend-mode" : "soft-light",
+          "fill-specializations" : [
+            {
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.63760,0.86471,0.89619,1.00000",
+                  "extended-gray:1.00000,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.24190514062063384,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.9643158115014613,
+                    "y" : 0.9584098995803241
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.38338,0.38338,0.38338,1.00000",
+                  "extended-gray:0.25000,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.883037013658852,
+                    "y" : 1
+                  },
+                  "stop" : {
+                    "x" : 0.30813278210853856,
+                    "y" : 0.11922523211783376
+                  }
+                }
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "linear-gradient" : [
+                  "srgb:0.92522,0.92561,0.83460,1.00000",
+                  "srgb:0.93951,0.93951,0.93951,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.24190514062063384,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.9643158115014613,
+                    "y" : 0.9584098995803241
+                  }
+                }
+              }
+            }
+          ],
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "McKey_Edges.svg",
+          "name" : "McKey_Edges"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
