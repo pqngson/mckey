@@ -1,4 +1,5 @@
 import Cocoa
+import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let tap = KeyTap()
@@ -9,10 +10,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var gateWindow: NSWindow?
     private var gateTimer: Timer?
 
+    private(set) var lastActivityAt = ProcessInfo.processInfo.systemUptime
+    private var lastTextFieldAt: TimeInterval = -1e9
+    private var manualAXSetAt: TimeInterval = -1e9
+    private var autoSwitchTimer: Timer?
+    private let logger = Logger(subsystem: "com.qngson.mckey", category: "click")
+
     /// Whether the UI is shown in Vietnamese (shared by menu + dialog).
     var viUI: Bool { defaults.object(forKey: "vietnameseUI") == nil ? true
                       : defaults.bool(forKey: "vietnameseUI") }
     func L(_ viText: String, _ enText: String) -> String { viUI ? viText : enText }
+
+    // MARK: - App Preferences
+
+    var switchSound: Bool {
+        get { defaults.object(forKey: "switchSound") == nil ? true : defaults.bool(forKey: "switchSound") }
+        set { defaults.set(newValue, forKey: "switchSound") }
+    }
+    var clickSound: Bool {
+        get { defaults.object(forKey: "clickSound") == nil ? true : defaults.bool(forKey: "clickSound") }
+        set { defaults.set(newValue, forKey: "clickSound") }
+    }
+    var clickSoundDelay: Int {
+        get {
+            let val = defaults.integer(forKey: "clickSoundDelay")
+            return val > 0 ? val : 10
+        }
+        set { defaults.set(newValue, forKey: "clickSoundDelay") }
+    }
+    var soundVolume: Double {
+        get {
+            if defaults.object(forKey: "soundVolume") == nil { return 1.0 }
+            let val = defaults.double(forKey: "soundVolume")
+            return min(max(val, 0.0), 1.0)
+        }
+        set {
+            let clamped = min(max(newValue, 0.0), 1.0)
+            defaults.set(clamped, forKey: "soundVolume")
+        }
+    }
+    var autoSwitchEnabled: Bool {
+        get { defaults.object(forKey: "autoSwitchEnabled") == nil ? true : defaults.bool(forKey: "autoSwitchEnabled") }
+        set { defaults.set(newValue, forKey: "autoSwitchEnabled") }
+    }
+    var autoSwitchToVietnamese: Bool {
+        get { defaults.bool(forKey: "autoSwitchToVietnamese") }
+        set { defaults.set(newValue, forKey: "autoSwitchToVietnamese") }
+    }
+    var autoSwitchDelay: Int {
+        get {
+            let val = defaults.integer(forKey: "autoSwitchDelay")
+            return val > 0 ? val : 10
+        }
+        set { defaults.set(newValue, forKey: "autoSwitchDelay") }
+    }
+
+    func noteActivity() {
+        lastActivityAt = ProcessInfo.processInfo.systemUptime
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         loadPreferences()
@@ -20,7 +75,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
 
         tap.onLanguageToggle = { [weak self] _ in
-            DispatchQueue.main.async { self?.playSwitchSound(); self?.refresh() }
+            DispatchQueue.main.async { self?.languageDidSwitch() }
+        }
+        tap.onMouseDown = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                self?.handleMouseDown(retry: false)
+            }
         }
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(focusChanged),
@@ -37,13 +97,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Start the keyboard tap and (optionally) show the control panel.
     private func finishStartup() {
+        if let frontApp = NSWorkspace.shared.frontmostApplication {
+            let pid = frontApp.processIdentifier
+            if pid != ProcessInfo.processInfo.processIdentifier {
+                FocusProbe.enableManualAX(pid: pid)
+                manualAXSetAt = ProcessInfo.processInfo.systemUptime
+            }
+        }
         _ = tap.start()
         refresh()
+        startAutoSwitchTimer()
         if defaults.object(forKey: "showDialogAtStart") == nil ||
            defaults.bool(forKey: "showDialogAtStart") {
             showControlPanel()
         } else {
             updateActivationPolicy()
+        }
+    }
+
+    private func startAutoSwitchTimer() {
+        autoSwitchTimer?.invalidate()
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.handleAutoSwitchTick()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        autoSwitchTimer = timer
+    }
+
+    private func handleAutoSwitchTick() {
+        guard autoSwitchEnabled else { return }
+        let target = autoSwitchToVietnamese
+        guard tap.enabled != target else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - max(tap.lastKeyAt, lastActivityAt) >= Double(autoSwitchDelay) {
+            tap.enabled = target
+            languageDidSwitch()
+        }
+    }
+
+    private func handleMouseDown(retry: Bool) {
+        guard switchSound && clickSound else { return }
+        let (isText, role, bundleID) = FocusProbe.textInputFocused()
+        let now = ProcessInfo.processInfo.systemUptime
+        if !isText {
+            if !retry && now - manualAXSetAt < 2.0 {
+                logger.notice("handleMouseDown outcome=retry-scheduled bundleID=\(bundleID, privacy: .public) role=\(role, privacy: .public) isText=\(isText, privacy: .public) retry=\(retry, privacy: .public)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.handleMouseDown(retry: true)
+                }
+                return
+            } else {
+                logger.notice("handleMouseDown outcome=not-text bundleID=\(bundleID, privacy: .public) role=\(role, privacy: .public) isText=\(isText, privacy: .public) retry=\(retry, privacy: .public)")
+                return
+            }
+        }
+        let away = now - max(lastTextFieldAt, tap.lastKeyAt)
+        lastTextFieldAt = now
+        if away >= Double(clickSoundDelay) {
+            playModeSound()
+            logger.notice("handleMouseDown outcome=played bundleID=\(bundleID, privacy: .public) role=\(role, privacy: .public) isText=\(isText, privacy: .public) retry=\(retry, privacy: .public) away=\(away, privacy: .public)")
+        } else {
+            logger.notice("handleMouseDown outcome=away-suppressed bundleID=\(bundleID, privacy: .public) role=\(role, privacy: .public) isText=\(isText, privacy: .public) retry=\(retry, privacy: .public) away=\(away, privacy: .public)")
         }
     }
 
@@ -54,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tap.method = im
         }
         tap.modernStyle = defaults.bool(forKey: "modernStyle")
+        tap.disableWordStartShortcuts = defaults.bool(forKey: "disableWordStartShortcuts")
         if defaults.object(forKey: "enabled") != nil {
             tap.enabled = defaults.bool(forKey: "enabled")
         }
@@ -62,10 +177,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func savePreferences() {
         defaults.set(tap.method.rawValue, forKey: "method")
         defaults.set(tap.modernStyle, forKey: "modernStyle")
+        defaults.set(tap.disableWordStartShortcuts, forKey: "disableWordStartShortcuts")
         defaults.set(tap.enabled, forKey: "enabled")
     }
 
-    @objc private func focusChanged() { tap.resetWord() }
+    @objc private func focusChanged(_ notification: Notification) {
+        tap.resetWord()
+        if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+            let pid = app.processIdentifier
+            if pid != ProcessInfo.processInfo.processIdentifier {
+                FocusProbe.enableManualAX(pid: pid)
+                manualAXSetAt = ProcessInfo.processInfo.systemUptime
+            }
+        }
+    }
 
     // MARK: - Accessibility gate (blocks until permission is granted)
 
@@ -200,7 +325,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func resetToDefaults() {
         tap.method = .telex
         tap.modernStyle = false
+        tap.disableWordStartShortcuts = false
         defaults.set(true, forKey: "showDialogAtStart")
+        defaults.removeObject(forKey: "switchSound")
+        defaults.removeObject(forKey: "clickSound")
+        defaults.removeObject(forKey: "clickSoundDelay")
+        defaults.removeObject(forKey: "soundVolume")
+        defaults.removeObject(forKey: "autoSwitchEnabled")
+        defaults.removeObject(forKey: "autoSwitchToVietnamese")
+        defaults.removeObject(forKey: "autoSwitchDelay")
         savePreferences()
         refresh()
         panel?.syncFromState()
@@ -320,17 +453,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Actions
 
-    @objc func toggleEnabled() {
-        tap.enabled.toggle()
+    func languageDidSwitch() {
+        lastActivityAt = ProcessInfo.processInfo.systemUptime
         savePreferences()
         playSwitchSound()
         refresh()
     }
 
-    /// A short system chirp when the language is switched.
+    @objc func toggleEnabled() {
+        tap.enabled.toggle()
+        languageDidSwitch()
+    }
+
+    func playModeSound() {
+        let name = tap.enabled ? "Tink" : "Pop"
+        if let sound = NSSound(named: NSSound.Name(name)) {
+            sound.stop()
+            sound.volume = Float(soundVolume)
+            sound.play()
+        }
+    }
+
     private func playSwitchSound() {
-        let name = tap.enabled ? "Tink" : "Pop"   // higher chirp for VI, softer for EN
-        NSSound(named: NSSound.Name(name))?.play()
+        guard switchSound else { return }
+        playModeSound()
     }
 
     @objc func showControlPanel() {

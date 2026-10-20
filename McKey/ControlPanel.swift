@@ -9,7 +9,15 @@ final class ControlPanelController: NSWindowController, NSWindowDelegate {
     // Controls we read back from.
     private var charsetPopup: NSPopUpButton!
     private var methodPopup: NSPopUpButton!
+    private var soundCheck: NSButton!
+    private var volumeSlider: NSSlider!
+    private var clickSoundCheck: NSButton!
+    private var clickSoundDelayPopup: NSPopUpButton!
+    private var autoSwitchCheck: NSButton!
+    private var autoTargetPopup: NSPopUpButton!
+    private var autoDelayPopup: NSPopUpButton!
     private var modernCheck: NSButton!
+    private var wordStartCheck: NSButton!
     private var showAtStartCheck: NSButton!
     private var launchLoginCheck: NSButton!
     private var vietUICheck: NSButton!
@@ -18,7 +26,7 @@ final class ControlPanelController: NSWindowController, NSWindowDelegate {
     init(app: AppDelegate) {
         self.app = app
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 594),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered, defer: false)
         win.title = "MćKey"
@@ -58,7 +66,7 @@ final class ControlPanelController: NSWindowController, NSWindowDelegate {
 
         // ===== Section: Điều khiển / Control =====
         let ctrlBox = section(L("Điều khiển", "Control"), in: content,
-                              frame: NSRect(x: 12, y: 276, width: 336, height: 96))
+                              frame: NSRect(x: 12, y: 470, width: 336, height: 96))
 
         ctrlBox.contentView?.addSubview(label(L("Bảng mã:", "Charset:"), x: 12, y: 62, w: labelW))
         charsetPopup = popup(items: ["Unicode"], x: ctlX, y: 60, w: 200)
@@ -75,13 +83,59 @@ final class ControlPanelController: NSWindowController, NSWindowDelegate {
         switchHint.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         ctrlBox.contentView?.addSubview(switchHint)
 
+        // ===== Section: Chuyển ngôn ngữ / Switching =====
+        let switchBox = section(L("Chuyển ngôn ngữ", "Switching"), in: content,
+                                frame: NSRect(x: 12, y: 276, width: 336, height: 158))
+
+        soundCheck = check(L("Phát âm thanh khi chuyển", "Play sound on switch"), x: 12, y: 132, w: 320)
+        soundCheck.target = self; soundCheck.action = #selector(apply)
+        switchBox.contentView?.addSubview(soundCheck)
+
+        switchBox.contentView?.addSubview(label(L("Âm lượng:", "Volume:"), x: 32, y: 108, w: 70))
+        let slider = NSSlider(value: 1.0, minValue: 0.0, maxValue: 1.0, target: self, action: #selector(volumeChanged))
+        slider.isContinuous = false
+        slider.frame = NSRect(x: 104, y: 106, width: 200, height: 22)
+        volumeSlider = slider
+        switchBox.contentView?.addSubview(volumeSlider)
+
+        clickSoundCheck = check(L("Cả khi bấm vào ô nhập", "Also when clicking a text field"), x: 32, y: 82, w: 300)
+        clickSoundCheck.target = self; clickSoundCheck.action = #selector(apply)
+        switchBox.contentView?.addSubview(clickSoundCheck)
+
+        switchBox.contentView?.addSubview(label(L("khi rời ô nhập quá", "when away for"), x: 52, y: 56, w: 136))
+        clickSoundDelayPopup = popup(items: ["5", "10", "15", "30", "60", "120", "300"], x: 190, y: 54, w: 64)
+        clickSoundDelayPopup.target = self; clickSoundDelayPopup.action = #selector(apply)
+        switchBox.contentView?.addSubview(clickSoundDelayPopup)
+
+        switchBox.contentView?.addSubview(label(L("giây", "sec"), x: 260, y: 56, w: 60))
+
+        autoSwitchCheck = check(L("Tự chuyển khi không gõ phím", "Auto-switch when idle"), x: 12, y: 30, w: 320)
+        autoSwitchCheck.target = self; autoSwitchCheck.action = #selector(apply)
+        switchBox.contentView?.addSubview(autoSwitchCheck)
+
+        switchBox.contentView?.addSubview(label(L("Về:", "To:"), x: 32, y: 4, w: 40))
+        autoTargetPopup = popup(items: ["EN", "VI"], x: 72, y: 2, w: 64)
+        autoTargetPopup.target = self; autoTargetPopup.action = #selector(apply)
+        switchBox.contentView?.addSubview(autoTargetPopup)
+
+        switchBox.contentView?.addSubview(label(L("sau", "after"), x: 144, y: 4, w: 44))
+        autoDelayPopup = popup(items: ["5", "10", "15", "30", "60", "120", "300"], x: 190, y: 2, w: 64)
+        autoDelayPopup.target = self; autoDelayPopup.action = #selector(apply)
+        switchBox.contentView?.addSubview(autoDelayPopup)
+
+        switchBox.contentView?.addSubview(label(L("giây", "sec"), x: 260, y: 4, w: 60))
+
         // ===== Section: Tùy chọn khác / Other options =====
         let optBox = section(L("Tùy chọn khác", "Other options"), in: content,
-                             frame: NSRect(x: 12, y: 178, width: 336, height: 38))
+                             frame: NSRect(x: 12, y: 178, width: 336, height: 62))
 
-        modernCheck = check(L("Đặt dấu oà, uý (thay vì òa, úy)", "Old-style tone (oà, uý)"), x: 12, y: 6, w: 320)
+        modernCheck = check(L("Đặt dấu oà, uý (thay vì òa, úy)", "Old-style tone (oà, uý)"), x: 12, y: 30, w: 320)
         modernCheck.target = self; modernCheck.action = #selector(apply)
         optBox.contentView?.addSubview(modernCheck)
+
+        wordStartCheck = check(L("Tắt gõ tắt w→ư, [→ơ ở đầu từ", "Disable w→ư, [→ơ at word start"), x: 12, y: 6, w: 320)
+        wordStartCheck.target = self; wordStartCheck.action = #selector(apply)
+        optBox.contentView?.addSubview(wordStartCheck)
 
         // ===== Section: Hệ thống / System =====
         let sysBox = section(L("Hệ thống", "System"), in: content,
@@ -132,20 +186,70 @@ final class ControlPanelController: NSWindowController, NSWindowDelegate {
         guard isWindowLoaded, window != nil, methodPopup != nil else { return }
         methodPopup.selectItem(withTitle: app.tap.method.rawValue)
         modernCheck.state = app.tap.modernStyle ? .on : .off
+        wordStartCheck.state = app.tap.disableWordStartShortcuts ? .on : .off
         let showAtStart = app.defaults.object(forKey: "showDialogAtStart") == nil
             || app.defaults.bool(forKey: "showDialogAtStart")
         showAtStartCheck.state = showAtStart ? .on : .off
         launchLoginCheck.state = isLaunchAtLoginEnabled() ? .on : .off
         vietUICheck.state = vi ? .on : .off
+
+        soundCheck.state = app.switchSound ? .on : .off
+        volumeSlider.doubleValue = app.soundVolume
+        clickSoundCheck.state = app.clickSound ? .on : .off
+        let clickDelayStr = String(app.clickSoundDelay)
+        clickSoundDelayPopup.selectItem(withTitle: clickDelayStr)
+        if clickSoundDelayPopup.selectedItem == nil {
+            clickSoundDelayPopup.selectItem(withTitle: "10")
+        }
+
+        autoSwitchCheck.state = app.autoSwitchEnabled ? .on : .off
+        autoTargetPopup.selectItem(withTitle: app.autoSwitchToVietnamese ? "VI" : "EN")
+        if autoTargetPopup.selectedItem == nil {
+            autoTargetPopup.selectItem(withTitle: "EN")
+        }
+        let autoDelayStr = String(app.autoSwitchDelay)
+        autoDelayPopup.selectItem(withTitle: autoDelayStr)
+        if autoDelayPopup.selectedItem == nil {
+            autoDelayPopup.selectItem(withTitle: "10")
+        }
+
+        let soundOn = soundCheck.state == .on
+        volumeSlider.isEnabled = soundOn
+        clickSoundCheck.isEnabled = soundOn
+        clickSoundDelayPopup.isEnabled = soundOn && (clickSoundCheck.state == .on)
+        autoTargetPopup.isEnabled = autoSwitchCheck.state == .on
+        autoDelayPopup.isEnabled = autoSwitchCheck.state == .on
+    }
+
+    @objc private func volumeChanged() {
+        app.soundVolume = volumeSlider.doubleValue
+        app.playModeSound()
     }
 
     @objc private func apply() {
         app.tap.method = methodPopup.indexOfSelectedItem == 1 ? .vni : .telex
         app.tap.modernStyle = modernCheck.state == .on
+        app.tap.disableWordStartShortcuts = wordStartCheck.state == .on
         app.tap.resetWord()
         app.defaults.set(showAtStartCheck.state == .on, forKey: "showDialogAtStart")
         setLaunchAtLogin(launchLoginCheck.state == .on)
+
+        app.switchSound = soundCheck.state == .on
+        app.clickSound = clickSoundCheck.state == .on
+        app.clickSoundDelay = Int(clickSoundDelayPopup.titleOfSelectedItem ?? "10") ?? 10
+        app.autoSwitchEnabled = autoSwitchCheck.state == .on
+        app.autoSwitchToVietnamese = autoTargetPopup.titleOfSelectedItem == "VI"
+        app.autoSwitchDelay = Int(autoDelayPopup.titleOfSelectedItem ?? "10") ?? 10
+
+        let soundOn = soundCheck.state == .on
+        volumeSlider.isEnabled = soundOn
+        clickSoundCheck.isEnabled = soundOn
+        clickSoundDelayPopup.isEnabled = soundOn && (clickSoundCheck.state == .on)
+        autoTargetPopup.isEnabled = autoSwitchCheck.state == .on
+        autoDelayPopup.isEnabled = autoSwitchCheck.state == .on
+
         app.savePreferences()
+        app.noteActivity()
         app.refresh()
     }
 

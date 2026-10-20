@@ -17,6 +17,7 @@ struct UkOptions {
     var spellCheckEnabled = true
     var autoNonVnRestore = false
     var macroEnabled = false
+    var disableWordStartShortcuts = false
 }
 
 private struct WordInfo {
@@ -1067,6 +1068,12 @@ final class UkEngine {
 
         var ret: Int
         if !toEscape {
+            // Treat word-start shortcuts (w, [ ] { }) as literal characters if disabled.
+            if options.disableWordStartShortcuts && vietKey && atWordBeginning() &&
+                (ev.evType == UkKeyEvName.vne_telex_w.rawValue || ev.evType == UkKeyEvName.vneMapChar.rawValue) {
+                input.keyCodeToSymbol(keyCode, &ev)
+                telexWUsedAsMapChar = false
+            }
             ret = dispatch(ev.evType, &ev)
         } else {
             toEscape = false

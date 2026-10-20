@@ -18,8 +18,14 @@ final class KeyTap {
         get { engine.options.modernStyle }
         set { engine.options.modernStyle = newValue }
     }
+    var disableWordStartShortcuts: Bool {
+        get { engine.options.disableWordStartShortcuts }
+        set { engine.options.disableWordStartShortcuts = newValue }
+    }
 
     var onLanguageToggle: ((Bool) -> Void)?
+    var onMouseDown: (() -> Void)?
+    var lastKeyAt = ProcessInfo.processInfo.systemUptime
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -89,7 +95,12 @@ final class KeyTap {
         }
 
         switch type {
-        case .leftMouseDown, .rightMouseDown:
+        case .leftMouseDown:
+            resetWord()
+            onMouseDown?()
+            return Unmanaged.passUnretained(event)
+
+        case .rightMouseDown:
             resetWord()
             return Unmanaged.passUnretained(event)
 
@@ -109,6 +120,8 @@ final class KeyTap {
     }
 
     private func handleKeyDown(_ event: CGEvent) -> Unmanaged<CGEvent>? {
+        lastKeyAt = ProcessInfo.processInfo.systemUptime
+
         // Any real key cancels a pending language-switch chord.
         armed = false
 
