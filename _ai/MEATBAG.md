@@ -1,4 +1,4 @@
-# Waiting on Son
+# Waiting on the meatbag
 
 - Try P2c in a real app:
   - The Switching section's layout: sound, then the volume slider, then the indented click-sound sub-option and its delay, then auto-switch.
