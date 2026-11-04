@@ -14,7 +14,7 @@ import os, subprocess, time
 
 binary = os.environ["PHTV_TEST_BINARY"]
 started = time.monotonic()
-for case in ["tables", "remove-marks", "tcvn-uppercase", "case-modes"]:
+for case in ["tables", "exhaustive", "tcvn-canonical", "fallback-passthrough", "remove-marks", "tcvn-uppercase", "case-modes"]:
     remaining = 30 - (time.monotonic() - started)
     if remaining <= 0:
         raise SystemExit("conversion tests exceeded the 30 second cap")

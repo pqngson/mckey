@@ -446,7 +446,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func refresh() {
-        if let button = statusItem.button {
+        if let button = statusItem?.button {
             button.image = makeBadge(tap.enabled ? "VI" : "EN", filled: tap.enabled)
             button.imagePosition = .imageOnly
         }

@@ -18,7 +18,7 @@ Penn accepted the license and requested PHTV's Bộ gõ, Phím tắt, Hệ thố
 ## Goal
 Use PHTV's Vietnamese composition engine in McKey without importing PHTV's unrelated app features.
 
-## Architecture
+## Historical initial architecture (superseded by accepted scope above)
 Inspected McKey working tree at e430487 and local PHTV at 0a42ef4. PHTV source root: /Users/qngson/Developer/Repositories/PHTV/Apps/macOS/PHTV.
 
 - Extract Engine/PHTVEngineCore.swift (3,135 lines) and Engine/PHTVVietnameseData.swift (712 lines), preserving source headers and provenance. These alone are not a standalone library.
@@ -29,7 +29,7 @@ Inspected McKey working tree at e430487 and local PHTV at 0a42ef4. PHTV source r
 - Keep current Telex/VNI preferences, modernStyle semantics (currently true selects the second vowel for oa/oe/uy), and disableWordStartShortcuts. Confirm mapping behavior by tests rather than equating similarly named options.
 - Keep the old engine until the adapter has passed composition and event-output tests; avoid shipping two active composition engines.
 
-## Spec
+## Historical initial spec (superseded by accepted scope above)
 Port composition only. No PHTV UI, clipboard history, emoji, GIF services, updater, dictionaries or bundled app managers.
 
 PHTV is AGPLv3; McKey carries GPLv3. A combined distribution must preserve applicable AGPL terms and notices, not describe the imported code as GPL-only. User preference is pending. Reference: https://www.gnu.org/licenses/license-compatibility.en.html . Review engine lineage notices referencing UniKey and OpenKey before distribution.
@@ -39,12 +39,12 @@ No state-changing git, GUI or installation. Preserve existing Info.plist and Xco
 
 ## Tasks
 - [x] Inspect source boundary, formats, tests and licenses
-- [ ] Resolve Penn's AGPL preference before copying code
-- [ ] Extract core and minimal settings/output adapter with provenance and license notices
+- [x] Resolve Penn's AGPL preference before copying code (accepted 2026-11-03)
+- [x] Extract core and minimal settings/output adapter with provenance and license notices
 - [ ] Add headless regression harness covering Telex/VNI, tones, uppercase, repeated modifiers, punctuation, bracket/w word-start suppression, backspace, reset/focus boundaries and unsupported Unicode/layout input
 - [ ] Test hook-state decoding against rendered output, including word breaks and deletions; adapt relevant cases from PHTV Tests/EngineRegressionTests.swift without its hosted-app dependencies
-- [ ] Integrate adapter with KeyTap; preserve existing preferences and app behavior
+- [x] Integrate adapter with KeyTap; preserve existing preferences and app behavior (headless verification; actual app checks pending)
 - [ ] Seat runs build and bounded headless tests; Penn judges typing behavior on device
 
 ## Verification
-Build separately with xcodebuild -scheme McKey -configuration Debug CODE_SIGNING_ALLOWED=NO build (use temporary derived-data location if sandbox requires). Headless tests need per-case limits and a 30-second Run / 45-second Batch wall cap. No build or runtime verification has been performed for this inspection. Dependency closure remains to be proved by compilation.
+Build separately with xcodebuild -scheme McKey -configuration Debug CODE_SIGNING_ALLOWED=NO build (use temporary derived-data location if sandbox requires). Headless tests need per-case limits and a 30-second Run / 45-second Batch wall cap. Unsigned Debug/Release builds and engine/converter/runtime suites passed on 2026-11-04. The cleanup audit is in specs/2026-11-04-port-audit.md; actual app checks remain pending.

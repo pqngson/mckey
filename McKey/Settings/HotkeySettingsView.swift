@@ -256,7 +256,7 @@ struct HotkeySettingsView: View {
 
     private func modifierSelectors(_ hotkey: Binding<McKeyHotkey>) -> some View {
         McKeySettingsRow(mcKeyText(settings, "Phím bổ trợ", "Modifiers")) {
-            HStack(spacing: McKeyTheme.Layout.compactSpacing) {
+            HStack(spacing: McKeyTheme.Hotkeys.modifierSpacing) {
                 modifier("⌃", title: "Control", binding: binding(hotkey, \.control))
                 modifier("⌥", title: "Option", binding: binding(hotkey, \.option))
                 modifier("⇧", title: "Shift", binding: binding(hotkey, \.shift))
@@ -267,12 +267,15 @@ struct HotkeySettingsView: View {
     }
 
     private func modifier(_ label: String, title: String, binding: Binding<Bool>) -> some View {
-        Toggle(title, isOn: binding)
-            .labelsHidden()
-            .toggleStyle(.button)
-            .controlSize(.small)
-            .overlay(Text(label).allowsHitTesting(false).font(.caption.weight(.semibold)))
-            .help(title)
+        Toggle(isOn: binding) {
+            Text(label)
+        }
+        .toggleStyle(.button)
+        .controlSize(.small)
+        .font(.system(size: McKeyTheme.Hotkeys.modifierFontSize, weight: .semibold))
+        .frame(width: McKeyTheme.Hotkeys.modifierButtonWidth)
+        .accessibilityLabel(title)
+        .help(title)
     }
 
     private func warning(_ title: String) -> some View {

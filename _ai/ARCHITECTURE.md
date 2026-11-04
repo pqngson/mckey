@@ -10,7 +10,14 @@ The active plan's accepted scope supersedes the legacy implementation notes belo
 - Batch: full headless engine/runtime suites under 45-second wall caps, build separately.
 - Milestone: unsigned Debug and Release app builds; Penn reviews actual app UI and typing. GUI tooling requires separate chat authorization.
 
+## Port audit & Dimensions extension prep
+- [Control wiring, encoding policy and prior art](specs/2026-11-04-port-audit.md) tracks the November cleanup. Native Backspace removes one complete logical encoded item; VNI/CP1258 may need two synthetic deletions, while Unicode Composite uses one grapheme deletion.
+- TCVN3 ambiguous accented bytes decode to lowercase by default; explicit uppercase conversion is supported. The converter displays this format limitation.
+- [Dimensions extension merge preparation](specs/2026-11-04-dimensions-extension-prep.md) documents the signed Release installation, standalone vs. extension file boundaries, and the 5 decoupling points (`McKeyRuntimeController`, `McKeyBundle`, standalone `SystemSettingsView` flags, `UserDefaults` suite, AGPLv3 notices) for Claude.
+
 ## Legacy implementation notes (before port)
+
+Historical only: the removed UK engine and AppDelegate-owned preferences below no longer describe the active port. Use the PHTV section and audit above for current code.
 
 - `McKey/UKEngine.swift`, `UKInput.swift`, `UKLexi.swift` — port of UniKey's engine. Keep it close to the original; new behaviour goes in as small, option-gated guards, not rewrites.
 - `UkOptions` (UKEngine.swift) holds engine options. `KeyTap` proxies them. `AppDelegate` persists them in `UserDefaults` (`loadPreferences` / `savePreferences` / `resetToDefaults`). `ControlPanel.swift` is the dashboard, built in code with hardcoded frames. Every label is bilingual via `L(vi, en)`.

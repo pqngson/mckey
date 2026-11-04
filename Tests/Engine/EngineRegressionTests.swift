@@ -34,7 +34,7 @@ enum EngineRegressionTests {
             let result = engine.process(keyCode: 51, shift: false, capsLock: false, characters: "", vietnamese: true)
             if result.handled { for _ in 0..<min(text.count, result.backspaces) { text.removeLast() }; text += result.output }
             else if !text.isEmpty { text.removeLast() }
-            precondition(text == "a", "VNI multi-unit backspace left \(text.debugDescription)")
+            precondition(text.isEmpty, "VNI multi-unit backspace left \(text.debugDescription)")
         case "caps":
             let upper = replay("AAS", inputType: 0, table: 0)
             precondition(upper == "Ấ", "uppercase output was \(upper)")
@@ -156,6 +156,39 @@ enum EngineRegressionTests {
             text += "d"
             let result = engine.process(keyCode: 49, shift: false, capsLock: false, characters: " ", vietnamese: true)
             precondition(result.handled && result.output == "haaland ", "backspace and retype restore: \(result.output.debugDescription)")
+        case "deletion-sync":
+            for table in 0...4 {
+                let engine = PHTVInputEngine(); engine.options.inputType = 0; engine.options.codeTable = table; engine.options.autoRestoreEnglishWord = false
+                var text = run(engine, "aas")
+                let del = engine.process(keyCode: 51, shift: false, capsLock: false, characters: "", vietnamese: true)
+                if del.handled { for _ in 0..<min(text.count, del.backspaces) { text.removeLast() }; text += del.output }
+                else if !text.isEmpty { text.removeLast() }
+                precondition(text.isEmpty, "table \(table): expected first deletion empty, left \(text.debugDescription)")
+
+                for c in "as" {
+                    let s = String(c)
+                    let res = engine.process(keyCode: 0, shift: false, capsLock: false, characters: s, vietnamese: true)
+                    if res.handled { for _ in 0..<min(text.count, res.backspaces) { text.removeLast() }; text += res.output }
+                    else { text += s }
+                }
+                let fresh = PHTVInputEngine(); fresh.options.inputType = 0; fresh.options.codeTable = table; fresh.options.autoRestoreEnglishWord = false
+                let expected = run(fresh, "as")
+                precondition(text == expected, "table \(table): retype as mismatch, got \(text.debugDescription), expected \(expected.debugDescription)")
+
+                let raw = engine.restoreRaw()
+                if raw.handled { for _ in 0..<min(text.count, raw.backspaces) { text.removeLast() }; text += raw.output }
+                precondition(raw.handled && text == "as" && raw.output == "as", "table \(table): restore raw mismatch: text=\(text.debugDescription), raw=\(raw)")
+
+                let prefixedEngine = PHTVInputEngine(); prefixedEngine.options.inputType = 0; prefixedEngine.options.codeTable = table; prefixedEngine.options.autoRestoreEnglishWord = false
+                let prefix = "prefix "
+                var prefixedText = run(prefixedEngine, prefix + "baas")
+                for _ in 0..<2 {
+                    let back = prefixedEngine.process(keyCode: 51, shift: false, capsLock: false, characters: "", vietnamese: true)
+                    if back.handled { for _ in 0..<min(prefixedText.count, back.backspaces) { prefixedText.removeLast() }; prefixedText += back.output }
+                    else if !prefixedText.isEmpty { prefixedText.removeLast() }
+                }
+                precondition(prefixedText == prefix, "table \(table): prefix after two deletions mismatch: got \(prefixedText.debugDescription), expected \(prefix.debugDescription)")
+            }
         default: fatalError("unknown case \(test)")
         }
         print("PASS \(test)")

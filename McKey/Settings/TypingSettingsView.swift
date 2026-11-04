@@ -48,8 +48,8 @@ struct TypingSettingsView: View {
                     McKeySettingsRow(mcKeyText(settings, "Tự động khôi phục từ", "Automatically restore words")) {
                         HStack(spacing: McKeyTheme.Layout.compactSpacing) {
                             Picker(mcKeyText(settings, "Chế độ khôi phục", "Restore mode"), selection: $settings.engine.autoRestoreEnglishWordMode) {
-                                Text("Không phải tiếng Việt").tag(0)
-                                Text("Chỉ tiếng Anh").tag(1)
+                                Text(mcKeyText(settings, "Không phải tiếng Việt", "Non-Vietnamese")).tag(0)
+                                Text(mcKeyText(settings, "Chỉ tiếng Anh", "English only")).tag(1)
                             }
                             .labelsHidden()
                             .pickerStyle(.menu)
@@ -175,14 +175,6 @@ struct TypingSettingsView: View {
         consonantDraft = ""
     }
 
-    private func appName(_ bundleID: String) -> String {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID),
-              let name = Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-                ?? Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundleName") as? String else {
-            return bundleID
-        }
-        return name
-    }
 
     private func methodName(_ value: Int) -> String {
         ["Telex", "VNI", "Simple Telex 1", "Simple Telex 2"].indices.contains(value)

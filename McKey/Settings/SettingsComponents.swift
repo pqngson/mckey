@@ -168,7 +168,7 @@ struct McKeyShortcutRecorderLabel: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, McKeyTheme.Layout.cardHorizontalPadding)
-        .frame(width: McKeyTheme.Layout.recorderWidth, height: McKeyTheme.Layout.controlHeight)
+        .frame(width: McKeyTheme.Hotkeys.recorderWidth, height: McKeyTheme.Layout.controlHeight)
         .background {
             RoundedRectangle(cornerRadius: McKeyTheme.Layout.recorderCornerRadius)
                 .fill(Color(nsColor: .controlBackgroundColor))

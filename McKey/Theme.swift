@@ -29,7 +29,6 @@ enum McKeyTheme {
         static let rowSpacing: CGFloat = 12
         static let compactSpacing: CGFloat = 6
         static let controlHeight: CGFloat = 32
-        static let recorderWidth: CGFloat = 168
         static let iconSize: CGFloat = 56
         static let cardSurfaceOpacity: Double = 0.035
         static let pillOpacity: Double = 0.08
@@ -42,6 +41,13 @@ enum McKeyTheme {
         static let controlStrokeWidth: CGFloat = 1
         static let metadataLineSpacing: CGFloat = 2
         static let singleLineLimit: Int = 1
+    }
+
+    enum Hotkeys {
+        static let modifierButtonWidth: CGFloat = 28
+        static let modifierSpacing: CGFloat = 6
+        static let modifierFontSize: CGFloat = 13
+        static let recorderWidth: CGFloat = 140
     }
 
     enum ConvertTool {

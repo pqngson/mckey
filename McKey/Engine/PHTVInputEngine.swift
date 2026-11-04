@@ -50,7 +50,9 @@ final class PHTVInputEngine {
         guard recognized else {
             if keyCode == 51, !renderedItems.isEmpty {
                 let last = renderedItems.removeLast()
-                if last.count > 1 { renderedItems.append(String(last.dropLast())) }
+                if last.count > 1 {
+                    return PHTVResult(handled: true, backspaces: last.count, output: "")
+                }
                 return PHTVResult(handled: false, backspaces: 0, output: "")
             }
             if characters.contains(where: { !$0.isLetter && !$0.isNumber && $0 != "'" }) { renderedItems.removeAll() }

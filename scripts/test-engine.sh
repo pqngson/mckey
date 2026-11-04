@@ -16,7 +16,7 @@ PHTV_TEST_BINARY="$APP/MacOS/engine-tests" python3 - <<'PY'
 import os, subprocess, sys, time
 
 binary = os.environ["PHTV_TEST_BINARY"]
-cases = ["telex", "vni", "simple", "tables", "backspace", "vni-backspace", "caps", "reset", "escape", "dictionary", "instances", "modern", "shortcuts", "quick", "restore", "words", "raw", "quick-start", "quick-end", "custom", "no-capitalize", "legacy-options", "boundary-delete", "restore-backspace"]
+cases = ["telex", "vni", "simple", "tables", "backspace", "vni-backspace", "caps", "reset", "escape", "dictionary", "instances", "modern", "shortcuts", "quick", "restore", "words", "raw", "quick-start", "quick-end", "custom", "no-capitalize", "legacy-options", "boundary-delete", "restore-backspace", "deletion-sync"]
 started = time.monotonic()
 for case in cases:
     remaining = 30 - (time.monotonic() - started)

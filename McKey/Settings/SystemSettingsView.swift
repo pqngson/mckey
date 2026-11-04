@@ -35,7 +35,7 @@ struct SystemSettingsView: View {
                     McKeySettingsDivider()
                     McKeyToggleRow(
                         title: mcKeyText(settings, "Hiện icon trên Dock", "Show icon in Dock"),
-                        subtitle: mcKeyText(settings, "Hiển thị MćKey trên Dock khi mở Cài đặt", "Show MćKey in the Dock while Settings is open"),
+                        subtitle: mcKeyText(settings, "Giữ MćKey trên Dock khi đóng Cài đặt", "Keep MćKey in the Dock when Settings is closed"),
                         isOn: $settings.showDockIcon
                     )
                 }
