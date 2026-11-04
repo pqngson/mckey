@@ -4,24 +4,11 @@ import CoreGraphics
 private let kInjectedMagic: Int64 = 0x554B4559   // "UKEY" — marks our own events
 
 final class KeyTap {
-    let engine = UkEngine()
+    let engine = PHTVInputEngine()
     var enabled = true {
-        didSet { engine.vietKey = enabled; engine.reset() }
+        didSet { engine.reset() }
     }
-
-    /// Input method + tone-placement style proxy to the ported engine.
-    var method: UkInputMethod {
-        get { engine.input.im }
-        set { engine.setIM(newValue) }
-    }
-    var modernStyle: Bool {
-        get { engine.options.modernStyle }
-        set { engine.options.modernStyle = newValue }
-    }
-    var disableWordStartShortcuts: Bool {
-        get { engine.options.disableWordStartShortcuts }
-        set { engine.options.disableWordStartShortcuts = newValue }
-    }
+    var englishLocked = false
 
     var onLanguageToggle: ((Bool) -> Void)?
     var onMouseDown: (() -> Void)?
@@ -34,17 +21,41 @@ final class KeyTap {
     private var curShift = false
     private var curCaps = false
     private let axSystem = AXUIElementCreateSystemWide()
-
-    // Language-switch chord tracking: (Ctrl or Fn) + Left-Shift.
-    private var leftShiftDown = false
-    private var leftControlDown = false
-    private var fnDown = false
-    private var armed = false
+    private var hotkeyReducer = McKeyHotkeyReducer()
+    private var hotkeys: [McKeyHotkey] = [McKeyHotkey(control: true, shift: true), McKeyHotkey(shift: true, fn: true)]
+    private var secondaryHotkeyEnabled = true
+    private var restoreKey: McKeyRestoreKey = .esc
+    private var pauseEnabled = false
+    private var pauseKey: McKeyModifierKey = .option
+    private var pauseReducer = McKeyPauseReducer()
+    private var restoreModifierWasDown = false
+    private var restoreModifierKeyPressed = false
+    private var isRecordingHotkey = false
+    private var frontmostBundleID: String?
 
     init() {
-        engine.vietKey = enabled
-        engine.keyCheck = { [weak self] in (self?.curShift ?? false, self?.curCaps ?? false) }
+        engine.options = PHTVOptions()
     }
+
+    func apply(options: PHTVOptions, primaryHotkey: McKeyHotkey, secondaryHotkey: McKeyHotkey,
+               secondaryHotkeyEnabled: Bool, restoreKey: McKeyRestoreKey,
+               pauseEnabled: Bool, pauseKey: McKeyModifierKey,
+               isRecordingHotkey: Bool) {
+        engine.options = options
+        engine.reset()
+        hotkeys = [primaryHotkey, secondaryHotkey]
+        self.secondaryHotkeyEnabled = secondaryHotkeyEnabled
+        self.restoreKey = restoreKey
+        self.pauseEnabled = pauseEnabled
+        self.pauseKey = pauseKey
+        self.isRecordingHotkey = isRecordingHotkey
+        pauseReducer.reset()
+        restoreModifierWasDown = false
+        restoreModifierKeyPressed = false
+        hotkeyReducer.cancel()
+    }
+
+    func setFrontmostApp(bundleID: String?) { frontmostBundleID = bundleID }
 
     // MARK: - Lifecycle
 
@@ -109,7 +120,7 @@ final class KeyTap {
             return Unmanaged.passUnretained(event)
 
         case .keyUp:
-            return Unmanaged.passUnretained(event)
+            return handleKeyUp(event)
 
         case .keyDown:
             return handleKeyDown(event)
@@ -121,15 +132,29 @@ final class KeyTap {
 
     private func handleKeyDown(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         lastKeyAt = ProcessInfo.processInfo.systemUptime
-
-        // Any real key cancels a pending language-switch chord.
-        armed = false
-
         let keycode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
         curShift = flags.contains(.maskShift)
         curCaps = flags.contains(.maskAlphaShift)
         let pass = Unmanaged.passUnretained(event)
+
+        if restoreModifierIsHeld(flags) { restoreModifierKeyPressed = true }
+
+        let hotkeyResult = hotkeyReducer.keyDown(Int(keycode), flags: normalizedModifiers(flags),
+            hotkeys: activeHotkeys, isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0)
+        if hotkeyResult.consumed { return nil }
+
+        if pauseReducer.isPaused {
+            return pass
+        }
+
+        if keycode == 53, restoreKey == .esc, engine.options.restoreOnEscape {
+            let restored = engine.restoreRaw()
+            if restored.handled {
+                emit(backspaces: restored.backspaces, insert: restored.output)
+                return nil
+            }
+        }
 
         // Let command/control/option shortcuts through untouched.
         if flags.contains(.maskCommand) || flags.contains(.maskControl) ||
@@ -138,12 +163,13 @@ final class KeyTap {
             return pass
         }
 
-        // Backspace: let the engine reposition tones if needed.
+        // The PHTV adapter handles deletion and tone repositioning itself.
         if keycode == 51 {
             if !enabled { return pass }
-            let r = engine.processBackspace()
-            if r.ret != 0 {
-                emit(backspaces: r.backspaces, insert: r.output)
+            let result = engine.process(keyCode: UInt16(keycode), shift: curShift,
+                capsLock: curCaps, characters: "", vietnamese: enabled)
+            if result.handled {
+                emit(backspaces: result.backspaces, insert: result.output)
                 return nil
             }
             return pass
@@ -164,19 +190,30 @@ final class KeyTap {
 
         // Feed the produced character to the engine (letters, digits, space,
         // punctuation — the engine classifies and handles word breaks itself).
-        guard let typed = producedString(event),
-              let scalar = typed.unicodeScalars.first else {
+        guard let typed = producedString(event), !typed.isEmpty else {
             resetWord()
             return pass
         }
 
-        let result = engine.process(UInt(scalar.value))
-        if result.ret == 0 {
+        let result = process(typed, keyCode: UInt16(keycode), shift: curShift, capsLock: curCaps)
+        if !result.handled {
             return pass   // engine made no change — original keystroke types itself
         }
 
         emit(backspaces: result.backspaces, insert: result.output)
         return nil
+    }
+
+    private func handleKeyUp(_ event: CGEvent) -> Unmanaged<CGEvent>? {
+        let keycode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        let result = hotkeyReducer.keyUp(keycode)
+        if let index = result.triggeredIndex { triggerLanguageSwitch(for: index) }
+        return result.consumed ? nil : Unmanaged.passUnretained(event)
+    }
+
+    private func process(_ typed: String, keyCode: UInt16, shift: Bool, capsLock: Bool) -> PHTVResult {
+        engine.process(keyCode: keyCode, shift: shift, capsLock: capsLock,
+                       characters: typed, vietnamese: enabled)
     }
 
     // MARK: - Autocomplete detection
@@ -260,35 +297,94 @@ final class KeyTap {
         return String(utf16CodeUnits: chars, count: length)
     }
 
-    // MARK: - Language switch hotkey: (Ctrl or Fn) + Left-Shift
-
     private func handleFlagsChanged(_ event: CGEvent) {
         let keycode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
+        let oldModifiers = normalizedModifiers(previousFlags)
+        let newModifiers = normalizedModifiers(flags)
+        updatePause(newFlags: newModifiers)
 
-        switch keycode {
-        case 56: leftShiftDown = flags.contains(.maskShift)        // left shift
-        case 59: leftControlDown = flags.contains(.maskControl)    // left control
-        case 63: fnDown = flags.contains(.maskSecondaryFn)         // fn
-        default: break
+        let restoreMask = restoreModifierMask
+        let wasRestoredModifierDown = restoreModifierWasDown
+        let restoreWasCancelled = restoreModifierKeyPressed
+
+        let result = hotkeyReducer.flagsChanged(newModifiers, hotkeys: activeHotkeys)
+        if let index = result.triggeredIndex {
+            triggerLanguageSwitch(for: index)
         }
 
-        // Reject if other modifiers (cmd/option/right-shift) are involved.
-        let extra = flags.contains(.maskCommand) || flags.contains(.maskAlternate)
-        let combo = leftShiftDown && (leftControlDown || fnDown)
-
-        if combo && !extra {
-            armed = true
-            return
+        if McKeyRuntimeModifiers.shouldRestoreRaw(oldFlags: oldModifiers, newFlags: newModifiers,
+            restoreMask: restoreMask, restoreWasDown: wasRestoredModifierDown,
+            restoreCancelled: restoreWasCancelled, hotkeyChordActive: result.chordActive,
+            hotkeyTriggered: result.triggeredIndex != nil, restoreEnabled: engine.options.restoreOnEscape) {
+            let restored = engine.restoreRaw()
+            if restored.handled { emit(backspaces: restored.backspaces, insert: restored.output) }
         }
-
-        // All chord modifiers released while still armed → toggle the language.
-        if armed && !leftShiftDown && !leftControlDown && !fnDown {
-            armed = false
-            enabled.toggle()
-            onLanguageToggle?(enabled)
-        } else if extra {
-            armed = false
+        if restoreMask != 0 && newModifiers & restoreMask != 0 {
+            restoreModifierWasDown = true
+            if newModifiers & ~restoreMask != 0 { restoreModifierKeyPressed = true }
         }
+        if restoreMask != 0 && oldModifiers & restoreMask != 0 && newModifiers & restoreMask == 0 {
+            restoreModifierWasDown = false
+            restoreModifierKeyPressed = false
+        }
+        previousFlags = flags
+        _ = keycode
+    }
+
+    private var previousFlags: CGEventFlags = []
+
+    private var activeHotkeys: [McKeyHotkey] {
+        if isRecordingHotkey { return [] }
+        let configured = secondaryHotkeyEnabled ? hotkeys : Array(hotkeys.prefix(1))
+        guard pauseEnabled else { return configured }
+        return configured.filter { $0.modifierMask & pauseModifierMask == 0 }
+    }
+
+    private var restoreModifierMask: Int {
+        guard engine.options.restoreOnEscape else { return 0 }
+        switch restoreKey {
+        case .esc: return 0
+        case .option: return 2
+        case .control: return 1
+        }
+    }
+
+    private func normalizedModifiers(_ flags: CGEventFlags) -> Int {
+        let raw = UInt64(flags.rawValue)
+        let hasBothSides = ((raw & 0x0001) != 0 && (raw & 0x2000) != 0) ||
+            ((raw & 0x0002) != 0 && (raw & 0x0004) != 0) ||
+            ((raw & 0x0008) != 0 && (raw & 0x0010) != 0) ||
+            ((raw & 0x0020) != 0 && (raw & 0x0040) != 0)
+        return McKeyRuntimeModifiers.normalize(control: flags.contains(.maskControl),
+            option: flags.contains(.maskAlternate), command: flags.contains(.maskCommand),
+            shift: flags.contains(.maskShift), fn: flags.contains(.maskSecondaryFn),
+            duplicateModifierSides: hasBothSides)
+    }
+
+    private func restoreModifierIsHeld(_ flags: CGEventFlags) -> Bool {
+        let mask = restoreModifierMask
+        return mask != 0 && normalizedModifiers(flags) & mask != 0
+    }
+
+    private var pauseModifierMask: Int {
+        switch pauseKey {
+        case .option: return 2
+        case .control: return 1
+        case .shift: return 8
+        case .fn: return 16
+        }
+    }
+
+    private func updatePause(newFlags: Int) {
+        let mask = pauseEnabled ? pauseModifierMask : 0
+        if pauseReducer.update(flags: newFlags, pauseMask: mask) { resetWord() }
+    }
+
+    private func triggerLanguageSwitch(for index: Int) {
+        if englishLocked && !enabled { return }
+        guard index < activeHotkeys.count else { return }
+        enabled.toggle()
+        onLanguageToggle?(enabled)
     }
 }

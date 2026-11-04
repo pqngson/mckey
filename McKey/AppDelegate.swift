@@ -1,9 +1,11 @@
 import Cocoa
 import os
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let tap = KeyTap()
     let defaults = UserDefaults.standard
+    let settings = McKeySettings()
     private var statusItem: NSStatusItem!
     private var panel: ControlPanelController?
     private weak var switchItem: NSMenuItem?
@@ -14,56 +16,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastTextFieldAt: TimeInterval = -1e9
     private var manualAXSetAt: TimeInterval = -1e9
     private var autoSwitchTimer: Timer?
+    private var englishAppRules = McKeyEnglishAppRuleState()
+    private var currentFrontBundleID: String?
     private let logger = Logger(subsystem: "com.qngson.mckey", category: "click")
 
     /// Whether the UI is shown in Vietnamese (shared by menu + dialog).
-    var viUI: Bool { defaults.object(forKey: "vietnameseUI") == nil ? true
-                      : defaults.bool(forKey: "vietnameseUI") }
+    var viUI: Bool { settings.vietnameseUI }
     func L(_ viText: String, _ enText: String) -> String { viUI ? viText : enText }
 
     // MARK: - App Preferences
 
-    var switchSound: Bool {
-        get { defaults.object(forKey: "switchSound") == nil ? true : defaults.bool(forKey: "switchSound") }
-        set { defaults.set(newValue, forKey: "switchSound") }
-    }
-    var clickSound: Bool {
-        get { defaults.object(forKey: "clickSound") == nil ? true : defaults.bool(forKey: "clickSound") }
-        set { defaults.set(newValue, forKey: "clickSound") }
-    }
-    var clickSoundDelay: Int {
-        get {
-            let val = defaults.integer(forKey: "clickSoundDelay")
-            return val > 0 ? val : 10
-        }
-        set { defaults.set(newValue, forKey: "clickSoundDelay") }
-    }
-    var soundVolume: Double {
-        get {
-            if defaults.object(forKey: "soundVolume") == nil { return 1.0 }
-            let val = defaults.double(forKey: "soundVolume")
-            return min(max(val, 0.0), 1.0)
-        }
-        set {
-            let clamped = min(max(newValue, 0.0), 1.0)
-            defaults.set(clamped, forKey: "soundVolume")
-        }
-    }
-    var autoSwitchEnabled: Bool {
-        get { defaults.object(forKey: "autoSwitchEnabled") == nil ? true : defaults.bool(forKey: "autoSwitchEnabled") }
-        set { defaults.set(newValue, forKey: "autoSwitchEnabled") }
-    }
-    var autoSwitchToVietnamese: Bool {
-        get { defaults.bool(forKey: "autoSwitchToVietnamese") }
-        set { defaults.set(newValue, forKey: "autoSwitchToVietnamese") }
-    }
-    var autoSwitchDelay: Int {
-        get {
-            let val = defaults.integer(forKey: "autoSwitchDelay")
-            return val > 0 ? val : 10
-        }
-        set { defaults.set(newValue, forKey: "autoSwitchDelay") }
-    }
+    var switchSound: Bool { get { settings.switchSound } set { settings.switchSound = newValue } }
+    var clickSound: Bool { get { settings.clickSound } set { settings.clickSound = newValue } }
+    var clickSoundDelay: Int { get { settings.clickSoundDelay } set { settings.clickSoundDelay = newValue } }
+    var soundVolume: Double { get { settings.soundVolume } set { settings.soundVolume = newValue } }
+    var autoSwitchEnabled: Bool { get { settings.autoSwitchEnabled } set { settings.autoSwitchEnabled = newValue } }
+    var autoSwitchToVietnamese: Bool { get { settings.autoSwitchToVietnamese } set { settings.autoSwitchToVietnamese = newValue } }
+    var autoSwitchDelay: Int { get { settings.autoSwitchDelay } set { settings.autoSwitchDelay = newValue } }
 
     func noteActivity() {
         lastActivityAt = ProcessInfo.processInfo.systemUptime
@@ -71,6 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         loadPreferences()
+        settings.onChange = { [weak self] in
+            guard let self else { return }
+            self.noteActivity()
+            self.applySettings()
+            self.refresh()
+        }
         buildMainMenu()
         setupStatusItem()
 
@@ -98,6 +73,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Start the keyboard tap and (optionally) show the control panel.
     private func finishStartup() {
         if let frontApp = NSWorkspace.shared.frontmostApplication {
+            let bundleID = frontApp.bundleIdentifier
+            tap.setFrontmostApp(bundleID: bundleID)
+            if bundleID != Bundle.main.bundleIdentifier {
+                currentFrontBundleID = bundleID
+                applyEnglishAppRule()
+            }
             let pid = frontApp.processIdentifier
             if pid != ProcessInfo.processInfo.processIdentifier {
                 FocusProbe.enableManualAX(pid: pid)
@@ -107,8 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = tap.start()
         refresh()
         startAutoSwitchTimer()
-        if defaults.object(forKey: "showDialogAtStart") == nil ||
-           defaults.bool(forKey: "showDialogAtStart") {
+        if settings.showDialogAtStart {
             showControlPanel()
         } else {
             updateActivationPolicy()
@@ -118,15 +98,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startAutoSwitchTimer() {
         autoSwitchTimer?.invalidate()
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.handleAutoSwitchTick()
+            MainActor.assumeIsolated { self?.handleAutoSwitchTick() }
         }
         RunLoop.main.add(timer, forMode: .common)
         autoSwitchTimer = timer
     }
 
+    private func applyEnglishAppRule() {
+        let result = englishAppRules.activate(bundleID: currentFrontBundleID, rule: settings.englishApp(for: currentFrontBundleID), currentVietnamese: tap.enabled)
+        tap.englishLocked = result.locked
+        if tap.enabled != result.vietnamese { tap.enabled = result.vietnamese; languageDidSwitch() } else { refresh() }
+    }
+
     private func handleAutoSwitchTick() {
         guard autoSwitchEnabled else { return }
         let target = autoSwitchToVietnamese
+        if target && tap.englishLocked { return }
         guard tap.enabled != target else { return }
         let now = ProcessInfo.processInfo.systemUptime
         if now - max(tap.lastKeyAt, lastActivityAt) >= Double(autoSwitchDelay) {
@@ -164,26 +151,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Preferences
 
     func loadPreferences() {
-        if let m = defaults.string(forKey: "method"), let im = UkInputMethod(rawValue: m) {
-            tap.method = im
-        }
-        tap.modernStyle = defaults.bool(forKey: "modernStyle")
-        tap.disableWordStartShortcuts = defaults.bool(forKey: "disableWordStartShortcuts")
         if defaults.object(forKey: "enabled") != nil {
             tap.enabled = defaults.bool(forKey: "enabled")
         }
+        settings.save()
+        applySettings()
     }
 
     func savePreferences() {
-        defaults.set(tap.method.rawValue, forKey: "method")
-        defaults.set(tap.modernStyle, forKey: "modernStyle")
-        defaults.set(tap.disableWordStartShortcuts, forKey: "disableWordStartShortcuts")
         defaults.set(tap.enabled, forKey: "enabled")
+        settings.save()
+    }
+
+    private func applySettings() {
+        tap.apply(options: settings.engine, primaryHotkey: settings.primaryHotkey,
+                  secondaryHotkey: settings.secondaryHotkey,
+                  secondaryHotkeyEnabled: settings.secondaryHotkeyEnabled,
+                  restoreKey: settings.restoreKey, pauseEnabled: settings.pauseEnabled,
+                  pauseKey: settings.pauseKey,
+                  isRecordingHotkey: settings.isRecordingHotkey)
+        updateActivationPolicy()
+        applyEnglishAppRule()
     }
 
     @objc private func focusChanged(_ notification: Notification) {
         tap.resetWord()
         if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+            let bundleID = app.bundleIdentifier
+            tap.setFrontmostApp(bundleID: bundleID)
+            if bundleID != Bundle.main.bundleIdentifier {
+                currentFrontBundleID = bundleID
+                applyEnglishAppRule()
+            }
             let pid = app.processIdentifier
             if pid != ProcessInfo.processInfo.processIdentifier {
                 FocusProbe.enableManualAX(pid: pid)
@@ -248,10 +247,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = AXIsProcessTrustedWithOptions(opts)
 
         gateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] t in
-            guard let self = self, AXIsProcessTrusted() else { return }
-            t.invalidate(); self.gateTimer = nil
-            self.gateWindow?.orderOut(nil); self.gateWindow = nil
-            self.finishStartup()
+            MainActor.assumeIsolated {
+                guard let self = self, AXIsProcessTrusted() else { return }
+                t.invalidate(); self.gateTimer = nil
+                self.gateWindow?.orderOut(nil); self.gateWindow = nil
+                self.finishStartup()
+            }
         }
     }
 
@@ -266,13 +267,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Activation policy (full menu bar only while a window is open)
 
     private func updateActivationPolicy() {
-        let needsRegular = (gateWindow != nil) || (panel?.window?.isVisible ?? false)
+        let needsRegular = settings.showDockIcon || (gateWindow != nil) || (panel?.window?.isVisible ?? false)
         NSApp.setActivationPolicy(needsRegular ? .regular : .accessory)
+        panel?.window?.level = settings.alwaysOnTop ? .floating : .normal
     }
 
     /// Called by the control panel when it is hidden/closed.
     func controlPanelDidHide() {
-        if gateWindow == nil { NSApp.setActivationPolicy(.accessory) }
+        guard gateWindow == nil else { updateActivationPolicy(); return }
+        NSApp.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
+        panel?.window?.level = settings.alwaysOnTop ? .floating : .normal
     }
 
     // MARK: - Application main menu (shown while the dialog is open)
@@ -316,24 +320,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func menuAbout() {
-        if panel == nil { panel = ControlPanelController(app: self) }
+        showControlPanel()
         panel?.about()
     }
 
     @objc private func menuReset() { resetToDefaults() }
 
     func resetToDefaults() {
-        tap.method = .telex
-        tap.modernStyle = false
-        tap.disableWordStartShortcuts = false
-        defaults.set(true, forKey: "showDialogAtStart")
-        defaults.removeObject(forKey: "switchSound")
-        defaults.removeObject(forKey: "clickSound")
-        defaults.removeObject(forKey: "clickSoundDelay")
-        defaults.removeObject(forKey: "soundVolume")
-        defaults.removeObject(forKey: "autoSwitchEnabled")
-        defaults.removeObject(forKey: "autoSwitchToVietnamese")
-        defaults.removeObject(forKey: "autoSwitchDelay")
+        settings.resetToDefaults()
+        tap.resetWord()
         savePreferences()
         refresh()
         panel?.syncFromState()
@@ -350,6 +345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func rebuildMenu() {
         buildMainMenu()   // keep the application menu in the same language
         let menu = NSMenu()
+        menu.autoenablesItems = false
 
         // "Switch to <language>" with the shortcut shown right-aligned. A plain
         // menu item never greys out the way an NSSwitch does in a background app.
@@ -384,9 +380,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// "Switch to <other language>" with the ⌃⇧ shortcut right-aligned.
     private func updateSwitchItem() {
         guard let item = switchItem else { return }
+        if tap.englishLocked {
+            item.isEnabled = false
+            item.attributedTitle = nil
+            item.title = L("Khoá tiếng Anh trong ứng dụng này", "English locked in this app")
+            return
+        }
+        item.isEnabled = true
         let target = tap.enabled ? "EN" : "VI"
         let title = L("Chuyển sang ", "Switch to ") + target
-        let shortcut = L("fn ⇧  hoặc  ⌃ ⇧", "fn ⇧  or  ⌃ ⇧")
+        let shortcut = settings.switchShortcutText
         let full = "\(title)\t\(shortcut)"
 
         let para = NSMutableParagraphStyle()
@@ -461,6 +464,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func toggleEnabled() {
+        if tap.englishLocked && !tap.enabled { NSSound.beep(); return }
         tap.enabled.toggle()
         languageDidSwitch()
     }
@@ -481,9 +485,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showControlPanel() {
         if panel == nil { panel = ControlPanelController(app: self) }
-        NSApp.setActivationPolicy(.regular)   // show the McKey menu bar + dock
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         panel?.show()
+        updateActivationPolicy()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }

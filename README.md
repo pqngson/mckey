@@ -17,8 +17,9 @@
 
 ## How it works
 
-A `CGEventTap` intercepts each keystroke and runs it through a Vietnamese engine
-(Telex / VNI) that maintains the current syllable.
+A `CGEventTap` intercepts each keystroke and runs it through the PHTV-derived
+Vietnamese engine (Telex, VNI and simple Telex modes), which maintains the
+current syllable and supports dictionary-based English restoration.
 
 - If the keystroke just appends a character that is identical to what you typed
   (normal letter, no accent change), the event passes through natively. To the
@@ -27,8 +28,7 @@ A `CGEventTap` intercepts each keystroke and runs it through a Vietnamese engine
   computes the new syllable, then deletes **only the changed suffix** (synthetic
   backspaces) and re-injects the replacement as a single atomic Unicode insert.
 
-Tone placement is ported from UniKey's `getTonePosition()`, so accents land on the
-correct vowel: `hòa`, `hoàn`, `thúy`, `người`, `cuộc`, `khỏe`, `tiếng`, `Việt`…
+The engine supports selectable tone placement and five output code tables.
 
 ## Contribution
 
@@ -36,9 +36,9 @@ Always welcome!
 
 ## Attribution
 
-[UniKey for Microsoft Windows](https://unikey.org) © Pham Kim Long, adapted under GPL license.<br />A faithful rewrite from C++ to native Swift for macOS.
+[UniKey for Microsoft Windows](https://unikey.org) © Pham Kim Long, adapted under GPL license.<br />Vietnamese composition and dictionary code also derives from [PHTV](https://github.com/PhamHungTien/PHTV) © Phạm Hùng Tiến under AGPLv3.
 
 ## License
 
-GNU General Public License
+McKey includes GPLv3-licensed UniKey-derived code and AGPLv3-licensed PHTV-derived code. The combined distribution must comply with both licenses, including the AGPLv3 terms. See [LICENSE.md](LICENSE.md), [LICENSE-AGPL-3.0.txt](McKey/LICENSE-AGPL-3.0.txt), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 

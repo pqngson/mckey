@@ -2,6 +2,16 @@
 
 macOS menu-bar Vietnamese IME. No test target; build is `xcodebuild -scheme McKey`.
 
+## PHTV port in progress (2026-11-03)
+The active plan's accepted scope supersedes the legacy implementation notes below. Penn accepted AGPLv3 code and requested PHTV's engine and four settings pages. Engine sources live under McKey/Engine; McKeySettings is the observable persistent settings model; ControlPanel hosts the adapted SwiftUI pages. McKey's existing sound profile (Tink=VI, Pop=EN), status badge/menu and idle auto-switch remain app-owned. UI tuning literals belong in McKey/Theme.swift, grouped by component. No PHTV clipboard/emoji/updater managers are part of this port.
+
+## Verification tiers
+- Run: compile engine harness uncapped, execute under 30-second wall cap with per-case limits; build app separately without test cap.
+- Batch: full headless engine/runtime suites under 45-second wall caps, build separately.
+- Milestone: unsigned Debug and Release app builds; Penn reviews actual app UI and typing. GUI tooling requires separate chat authorization.
+
+## Legacy implementation notes (before port)
+
 - `McKey/UKEngine.swift`, `UKInput.swift`, `UKLexi.swift` — port of UniKey's engine. Keep it close to the original; new behaviour goes in as small, option-gated guards, not rewrites.
 - `UkOptions` (UKEngine.swift) holds engine options. `KeyTap` proxies them. `AppDelegate` persists them in `UserDefaults` (`loadPreferences` / `savePreferences` / `resetToDefaults`). `ControlPanel.swift` is the dashboard, built in code with hardcoded frames. Every label is bilingual via `L(vi, en)`.
 - An **engine** preference touches all four layers, in that order. An **app-level** preference, one the engine never reads, is a computed property on `AppDelegate` over `UserDefaults` plus its `ControlPanel` control. Examples are sound, auto-switch and bubble.
