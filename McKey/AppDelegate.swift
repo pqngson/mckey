@@ -106,14 +106,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyEnglishAppRule() {
         let result = englishAppRules.activate(bundleID: currentFrontBundleID, rule: settings.englishApp(for: currentFrontBundleID), currentVietnamese: tap.enabled)
-        tap.englishLocked = result.locked
-        if tap.enabled != result.vietnamese { tap.enabled = result.vietnamese; languageDidSwitch() } else { refresh() }
+        tap.languageLock = result.lock
+        if tap.enabled != result.vietnamese { tap.enabled = result.vietnamese; languageDidSwitch(silent: true) } else { refresh() }
     }
 
     private func handleAutoSwitchTick() {
         guard autoSwitchEnabled else { return }
         let target = autoSwitchToVietnamese
-        if target && tap.englishLocked { return }
+        if target && tap.languageLock == .english { return }
+        if !target && tap.languageLock == .vietnamese { return }
         guard tap.enabled != target else { return }
         let now = ProcessInfo.processInfo.systemUptime
         if now - max(tap.lastKeyAt, lastActivityAt) >= Double(autoSwitchDelay) {
@@ -380,10 +381,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// "Switch to <other language>" with the ⌃⇧ shortcut right-aligned.
     private func updateSwitchItem() {
         guard let item = switchItem else { return }
-        if tap.englishLocked {
+        if tap.languageLock != .none {
             item.isEnabled = false
             item.attributedTitle = nil
-            item.title = L("Khoá tiếng Anh trong ứng dụng này", "English locked in this app")
+            item.title = tap.languageLock == .english
+                ? L("Khoá tiếng Anh trong ứng dụng này", "English locked in this app")
+                : L("Giữ tiếng Việt trong ứng dụng này", "Vietnamese kept in this app")
             return
         }
         item.isEnabled = true
@@ -406,43 +409,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Theme-aware template badge: VI is filled, EN is outlined; the menu bar
     /// tints the template to match light/dark appearance automatically.
     private func makeBadge(_ text: String, filled: Bool) -> NSImage {
-        // Match the system input-source badge: ~18pt tall pill, width snug to the
-        // text. (Fixed 22pt boxes render oversized next to it.)
-        let para = NSMutableParagraphStyle(); para.alignment = .center
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 12, weight: .bold),
-            .foregroundColor: NSColor.black,
-            .paragraphStyle: para,
-        ]
-        let ns = text as NSString
-        let ts = ns.size(withAttributes: attrs)
-
-        // Constant width for both labels (max of VN/EN) so toggling never shifts
-        // the menu bar; the text is centered within it.
-        let H: CGFloat = 18
-        let widest = max(("VI" as NSString).size(withAttributes: attrs).width,
-                         ("EN" as NSString).size(withAttributes: attrs).width)
-        let W = ceil(widest) + 10
-        let size = NSSize(width: W, height: H)
-        let image = NSImage(size: size)
-        image.lockFocus()
-        let rect = NSRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)
-        let r: CGFloat = 4   // rounded rect, not a full pill
-        let path = NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r)
-        let textRect = NSRect(x: 0, y: (H - ts.height) / 2.0, width: W, height: ts.height)
-
-        if filled {
-            NSColor.black.setFill(); path.fill()
-            // Knock the glyphs out so the menu-bar background shows through.
-            NSGraphicsContext.current?.compositingOperation = .destinationOut
-            ns.draw(in: textRect, withAttributes: attrs)
-        } else {
-            NSColor.black.setStroke(); path.lineWidth = 1.2; path.stroke()
-            ns.draw(in: textRect, withAttributes: attrs)
-        }
-        image.unlockFocus()
-        image.isTemplate = true   // system tints for light/dark + highlight
-        return image
+        McKeyBadge.make(text, filled: filled)
     }
 
     func refresh() {
@@ -456,15 +423,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Actions
 
-    func languageDidSwitch() {
+    func languageDidSwitch(silent: Bool = false) {
         lastActivityAt = ProcessInfo.processInfo.systemUptime
         savePreferences()
-        playSwitchSound()
+        if !silent { playSwitchSound() }
         refresh()
     }
 
     @objc func toggleEnabled() {
-        if tap.englishLocked && !tap.enabled { NSSound.beep(); return }
+        if (tap.languageLock == .english && !tap.enabled) || (tap.languageLock == .vietnamese && tap.enabled) { NSSound.beep(); return }
         tap.enabled.toggle()
         languageDidSwitch()
     }

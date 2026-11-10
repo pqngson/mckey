@@ -174,12 +174,21 @@ private struct McKeyAppRowView: View {
                 .tag(McKeyEnglishAppBehavior.switchToEnglish)
                 .help(behaviorHelpText(.switchToEnglish))
 
-                Label(
-                    mcKeyText(settings, "Khoá tiếng Anh", "Lock English"),
-                    systemImage: "lock.fill"
-                )
+                Label {
+                    Text(mcKeyText(settings, "Giữ EN", "Keep EN"))
+                } icon: {
+                    Image(nsImage: McKeyBadge.make("EN", filled: false))
+                }
                 .tag(McKeyEnglishAppBehavior.lockEnglish)
                 .help(behaviorHelpText(.lockEnglish))
+
+                Label {
+                    Text(mcKeyText(settings, "Giữ VN", "Keep VN"))
+                } icon: {
+                    Image(nsImage: McKeyBadge.make("VI", filled: true))
+                }
+                .tag(McKeyEnglishAppBehavior.lockVietnamese)
+                .help(behaviorHelpText(.lockVietnamese))
             }
             .pickerStyle(.menu)
             .labelsHidden()
@@ -205,14 +214,36 @@ private struct McKeyAppRowView: View {
         }
         .onHover { isHovered = $0 }
         .contextMenu {
-            Button(mcKeyText(settings, "Tự chuyển", "Switch to English")) {
+            Button {
                 if let index = settings.englishApps.firstIndex(where: { $0.id == app.id }) {
                     settings.englishApps[index].behavior = .switchToEnglish
                 }
+            } label: {
+                Label(
+                    mcKeyText(settings, "Tự chuyển", "Switch to English"),
+                    systemImage: "arrow.right.circle"
+                )
             }
-            Button(mcKeyText(settings, "Khoá tiếng Anh", "Lock English")) {
+            Button {
                 if let index = settings.englishApps.firstIndex(where: { $0.id == app.id }) {
                     settings.englishApps[index].behavior = .lockEnglish
+                }
+            } label: {
+                Label {
+                    Text(mcKeyText(settings, "Giữ EN", "Keep EN"))
+                } icon: {
+                    Image(nsImage: McKeyBadge.make("EN", filled: false))
+                }
+            }
+            Button {
+                if let index = settings.englishApps.firstIndex(where: { $0.id == app.id }) {
+                    settings.englishApps[index].behavior = .lockVietnamese
+                }
+            } label: {
+                Label {
+                    Text(mcKeyText(settings, "Giữ VN", "Keep VN"))
+                } icon: {
+                    Image(nsImage: McKeyBadge.make("VI", filled: true))
                 }
             }
             Divider()
@@ -253,6 +284,12 @@ private struct McKeyAppRowView: View {
                 settings,
                 "Luôn giữ tiếng Anh và chặn mọi cách bật tiếng Việt trong ứng dụng.",
                 "Always keep English and prevent switching to Vietnamese in this app."
+            )
+        case .lockVietnamese:
+            return mcKeyText(
+                settings,
+                "Luôn giữ tiếng Việt và chặn chuyển sang tiếng Anh trong ứng dụng này.",
+                "Always keep Vietnamese and prevent switching to English in this app."
             )
         }
     }

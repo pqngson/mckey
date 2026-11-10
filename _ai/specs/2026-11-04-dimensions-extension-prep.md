@@ -5,7 +5,6 @@ Handoff spec for Claude after building and installing the signed standalone `Rel
 ## 1. Signed Release & Installation Status
 
 - **Installed bundle:** `/Users/qngson/Applications/MćKey.app`
-- **Previous bundle backup:** `/Users/qngson/Applications/.MćKey-before-signed-20261104-1416.app` (earlier backups from 2026-11-04 also remain in `~/Applications/.MćKey-before-*.app`)
 - **Signing details:** `Apple Development: Son Pham (5389U46Y92)`, `TeamIdentifier=GR6X5BCD3Q`, hardened runtime (`flags=0x10000(runtime)`), universal binary (`arm64` + `x86_64`), `CDHash=796cea1fe4492e443b455573444d352eaadffe86`. Signing with a real Apple Development identity (rather than `CODE_SIGNING_ALLOWED=NO` + ad-hoc `--sign -`) preserves macOS TCC / Accessibility trust across rebuilds.
 - **Verification completed before install:**
   - `git diff --check` → clean

@@ -8,7 +8,7 @@ final class KeyTap {
     var enabled = true {
         didSet { engine.reset() }
     }
-    var englishLocked = false
+    var languageLock: McKeyLanguageLock = .none
 
     var onLanguageToggle: ((Bool) -> Void)?
     var onMouseDown: (() -> Void)?
@@ -382,7 +382,8 @@ final class KeyTap {
     }
 
     private func triggerLanguageSwitch(for index: Int) {
-        if englishLocked && !enabled { return }
+        if languageLock == .english && !enabled { return }
+        if languageLock == .vietnamese && enabled { return }
         guard index < activeHotkeys.count else { return }
         enabled.toggle()
         onLanguageToggle?(enabled)

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Visual tokens adapted from PHTV SettingsComponents.swift (PHTV, 2026; AGPL-3.0).
@@ -69,5 +70,44 @@ enum McKeyTheme {
         static let singleLineLimit: Int = 1 // lines
         static let hoverBackgroundOpacity: Double = 0.05 // opacity
         static let hoverCornerRadius: CGFloat = 6 // pt
+    }
+}
+
+enum McKeyBadge {
+    /// Theme-aware template badge: VI is filled, EN is outlined; system
+    /// tints the template to match light/dark appearance automatically.
+    static func make(_ text: String, filled: Bool) -> NSImage {
+        let para = NSMutableParagraphStyle(); para.alignment = .center
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .bold),
+            .foregroundColor: NSColor.black,
+            .paragraphStyle: para,
+        ]
+        let ns = text as NSString
+        let ts = ns.size(withAttributes: attrs)
+
+        let H: CGFloat = 18
+        let widest = max(("VI" as NSString).size(withAttributes: attrs).width,
+                         ("EN" as NSString).size(withAttributes: attrs).width)
+        let W = ceil(widest) + 10
+        let size = NSSize(width: W, height: H)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        let rect = NSRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)
+        let r: CGFloat = 4
+        let path = NSBezierPath(roundedRect: rect, xRadius: r, yRadius: r)
+        let textRect = NSRect(x: 0, y: (H - ts.height) / 2.0, width: W, height: ts.height)
+
+        if filled {
+            NSColor.black.setFill(); path.fill()
+            NSGraphicsContext.current?.compositingOperation = .destinationOut
+            ns.draw(in: textRect, withAttributes: attrs)
+        } else {
+            NSColor.black.setStroke(); path.lineWidth = 1.2; path.stroke()
+            ns.draw(in: textRect, withAttributes: attrs)
+        }
+        image.unlockFocus()
+        image.isTemplate = true
+        return image
     }
 }

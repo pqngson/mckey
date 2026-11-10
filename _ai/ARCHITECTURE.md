@@ -9,6 +9,7 @@ The active plan's accepted scope supersedes the legacy implementation notes belo
 - Run: compile engine harness uncapped, execute under 30-second wall cap with per-case limits; build app separately without test cap.
 - Batch: full headless engine/runtime suites under 45-second wall caps, build separately.
 - Milestone: unsigned Debug and Release app builds; Penn reviews actual app UI and typing. GUI tooling requires separate chat authorization.
+- Install: replace `~/Applications/MćKey.app` in place; never keep, move or copy the installed bundle aside. Extra registered `com.qngson.mckey` bundles break permissions, including `actool` on `McKey/mckey.icon`. After installing, `lsregister -u` and delete every build product, leaving `lsregister -dump` with only the installed path.
 
 ## Port audit & Dimensions extension prep
 - [Control wiring, encoding policy and prior art](specs/2026-11-04-port-audit.md) tracks the November cleanup. Native Backspace removes one complete logical encoded item; VNI/CP1258 may need two synthetic deletions, while Unicode Composite uses one grapheme deletion.
